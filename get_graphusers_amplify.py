@@ -51,14 +51,8 @@ print ("### Python program START ### : " + str(datetime.now()))
 # ========== Instantiate "environment" variables & containers ==========
 # Write Container list
 global writeList
-writeList = ['id', 'Display Name', 'Given Name', 'Surname', 'Email', 'Job Title', \
-    'CAI', 'Provisioning ID', 'HR GUID', \
-    'PersonRelationshipType', \
-    'Level 1 Name', 'Level 1 Code', \
-    'Level 2 Name', 'Level 2 Code', \
-    'Level 3 Name', 'Level 3 Code', \
-    'Level 4 Name', 'Level 4 Code', \
-    'Level 5 Name', 'Level 5 Code', \
+writeList = ['id', 'Display Name', 'Given Name', 'Surname', \
+    'Email', 'Job Title' \
         ]
 global fields
 fields = writeList
@@ -69,8 +63,6 @@ _sysparams = False
 
 # HELIOS
 payload_path = '/Users/bencarpena/OneDrive/_Projects/Projects/targetprocess/files/graph/'
-
-
 
 
 # ============================== ===
@@ -106,22 +98,7 @@ def process_GraphAPI_Results(_payload):
     for rows in data_collection:
         writeList = []
         d0 = data['value'][i]
-        #debug only: print(d0) #dictionary; key-value pair
         
-        # +++++ optional: parse through fields +++++
-
-        # +++ parse method 1: +++
-        '''
-        for d_inner_contents in enumerate(d0.items()): 
-            print (d_inner_contents) 
-        '''
-
-        # +++ parse method 2: +++
-        '''
-        for d_key, d_value in d0.items(): 
-            print (d_key, d_value)
-        '''
-
         # ======= READ & GET only needed Dictionary key-value contents =======
         aad_id = bstr(d0['id'])
         displayName = bstr(d0['displayName'])
@@ -130,54 +107,6 @@ def process_GraphAPI_Results(_payload):
         email = bstr(d0['userPrincipalName'])
         jobTitle = bstr(d0['jobTitle']) 
 
-        
-
-        # --- Handle data inconsistencies in output ---
-        if 'extension_39c7d3e68666465dab296ee0fc538118_cvx_ProvisioningID' in data['value'][i]:
-            ProvisioningID = bstr(d0['extension_39c7d3e68666465dab296ee0fc538118_cvx_ProvisioningID'])
-        else:
-            ProvisioningID = 'None'
-
-        if 'extension_39c7d3e68666465dab296ee0fc538118_extensionAttribute11' in data['value'][i]:
-            CAI = bstr(d0['extension_39c7d3e68666465dab296ee0fc538118_extensionAttribute11'])
-        else:
-            CAI = 'None'
-        
-        if 'extension_39c7d3e68666465dab296ee0fc538118_cvx_HRGUID' in data['value'][i]:
-            HrGUID = bstr(d0['extension_39c7d3e68666465dab296ee0fc538118_cvx_HRGUID'])
-        else:
-            HrGUID = 'None'
-        
-        if 'extension_39c7d3e68666465dab296ee0fc538118_cvx_PersonRelationshipType' in data['value'][i]:
-            personRType = bstr(d0['extension_39c7d3e68666465dab296ee0fc538118_cvx_PersonRelationshipType'])
-        else:
-            personRType = 'None'
-
-
-
-        if 'chevron_organization' in data['value'][i]:
-            L5name = bstr(d0['chevron_organization']['level5Name'])
-            L5code = bstr(d0['chevron_organization']['level5Code'])
-            L4name = bstr(d0['chevron_organization']['level4Name'])
-            L4code = bstr(d0['chevron_organization']['level4Code'])
-            L3name = bstr(d0['chevron_organization']['level3Name'])
-            L3code = bstr(d0['chevron_organization']['level3Code'])
-            L2name = bstr(d0['chevron_organization']['level2Name'])
-            L2code = bstr(d0['chevron_organization']['level2Code'])
-            L1name = bstr(d0['chevron_organization']['level1Name'])
-            L1code = bstr(d0['chevron_organization']['level1Code'])
-        else:
-            L5name = 'None'
-            L5code = 'None'
-            L4name = 'None'
-            L4code = 'None'
-            L3name = 'None'
-            L3code = 'None'
-            L2name = 'None'
-            L2code = 'None'
-            L1name = 'None'
-            L1code = 'None'
-
         # ==== Store needed data in list ===
         writeList.append(aad_id.replace('\t', ''))
         writeList.append(displayName.replace('\t', ''))
@@ -185,20 +114,7 @@ def process_GraphAPI_Results(_payload):
         writeList.append(surname.replace('\t', ''))
         writeList.append(email.replace('\t', ''))
         writeList.append(jobTitle.replace('\t', ''))
-        writeList.append(CAI.replace('\t', ''))
-        writeList.append(ProvisioningID.replace('\t', ''))
-        writeList.append(HrGUID.replace('\t', ''))
-        writeList.append(personRType.replace('\t', ''))
-        writeList.append(bstr(L1name).replace('\t', ''))
-        writeList.append(bstr(L1code).replace('\t', ''))
-        writeList.append(bstr(L2name).replace('\t', ''))
-        writeList.append(bstr(L2code).replace('\t', ''))
-        writeList.append(bstr(L3name).replace('\t', ''))
-        writeList.append(bstr(L3code).replace('\t', ''))
-        writeList.append(bstr(L4name).replace('\t', ''))
-        writeList.append(bstr(L4code).replace('\t', ''))
-        writeList.append(bstr(L5name).replace('\t', ''))
-        writeList.append(bstr(L5code).replace('\t', ''))
+        
 
         # ====== WRITE to file =========
         write_to_txt_file(writeList)
