@@ -13,4 +13,4 @@ https://github.com/bencarpena/pythongraph/blob/main/get_graphusers_amplify.py
 # Solution Architecture and Diagram
 
 
-
+![Solution Architecture](https://github.com/bencarpena/pythongraph/blob/main/engineering.png)
