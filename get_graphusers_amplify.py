@@ -271,7 +271,7 @@ try:
     'Content-Type': 'application/x-www-form-urlencoded',
     'Cookie': 'x-ms-gateway-slice=prod; stsservicecookie=ests; fpc=AtFNoyrjgQpIlyC0MQvqfvYi7P8JAQAAAI6uptcOAAAA'
     }
-    conn.request("GET", "/fd799da1-bfc1-4234-a91c-72b3a1cb9e26/oauth2/v2.0/token", payload, headers)
+    conn.request("GET", "/fd7___/oauth2/v2.0/token", payload, headers)
     res = conn.getresponse()
     token_ = res.read().decode("utf-8")
 
@@ -291,27 +291,13 @@ try:
 
     # ==== FORM initial Graph Request ====
     # prod graph call ----- with specifics and extended attributes
-    '''
-    _graphreq = '/v1.0/users?$select=id,accountEnabled,userPrincipalName,\
-displayName,surname,givenName,jobTitle,extension_39c7d3e68666465dab296ee0fc538118_cvx_HRGUID,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_ProvisioningID,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_SourcingCompanyID,\
-extension_39c7d3e68666465dab296ee0fc538118_extensionAttribute11,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_PersonRelationshipType,\
-manager,state,country,mobilephone,chevron_organization'
-    '''
-
 
     # Filtered Graph request (demo)
     
     _graphreq = "/v1.0/users?$filter=startswith(displayName,\
 'benjamin')&$select=id,accountEnabled,userPrincipalName,\
-displayName,surname,givenName,jobTitle,extension_39c7d3e68666465dab296ee0fc538118_cvx_HRGUID,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_ProvisioningID,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_SourcingCompanyID,\
-extension_39c7d3e68666465dab296ee0fc538118_extensionAttribute11,\
-extension_39c7d3e68666465dab296ee0fc538118_cvx_PersonRelationshipType,\
-manager,state,country,mobilephone,chevron_organization"
+displayName,surname,givenName,jobTitle,\
+manager,state,country,mobilephone"
     
     conn.request("GET", _graphreq, payload, headers)
 
