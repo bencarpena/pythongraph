@@ -10,3 +10,7 @@ Consuming APIs with Python is relatively easy and if you couple that with numpy 
 
 https://github.com/bencarpena/pythongraph/blob/main/get_graphusers_amplify.py
 
+# Solution Architecture and Diagram
+
+
+
