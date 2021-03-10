@@ -62,7 +62,7 @@ _sysparams = False
 
 
 # HELIOS
-payload_path = '/Users/bencarpena/OneDrive/_Projects/Projects/targetprocess/files/graph/'
+payload_path = '/mypath/files/graph/'
 
 
 # ============================== ===
