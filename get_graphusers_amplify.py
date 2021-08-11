@@ -1,26 +1,24 @@
 '''
 ========================================
-EXTRACT and PROCESS Azure AD Users
+EXTRACT and PROCESS Graph json data
 ========================================
 
 # Author: @bencarpena
 
 # Workflow:
--   Generate token for access to Graph API
--   Run Graph API Query
--   Read httpclient output
--   Convert AAD OData JSON to tab-delimited TXT file
--   Convert tab-delimited TXT file to JSON then to PARQUET (in-progress)
--   File will then be loaded to Data Lake and Azure Data Factory for further processing (in-progress)
-
+[+]   Generate token for access to Graph API
+[+]   Run Graph API Query
+[+]   Read httpclient output
+[+]   Create Lego : Unpack + Flatten; Convert AAD OData JSON to tab-delimited TXT file
 
 # Change log:
 @bencarpena     :   20210131 : 	initial codes created; v1
                 :   20210201 :  added scaffold and strawman
-                :   20210206 :  added txt --> json converter; upgraded to use global variables
-                             :  beautified filename; PEP8 naming convention
-                             :  added subroutines to get 'nextPage' API results
-                :   20210214 :  Added _sysparams for json output flag
+                :   20210212 :  added bstr function to address data quality issues with Graph; `None`
+                :   20210213 :  Need to parameterize json converter subroutines; 
+                             :  File size could reach GB if full pull is done; memory intensive
+                :   20210625 :  upgraded and enhanced bstr function
+
 
 '''
 
@@ -31,7 +29,45 @@ import csv
 from datetime import datetime
 import pandas as pd
 import ssl
+import requests
+import lihim
+import re
 
+
+def post_slack_msg(_message):
+    ########### Post Log at Slack Channel #viewbag ################
+    dtstamp = datetime.now()
+    slack_msg = {'text' : '#Graph (Azure AD : fd799da1-bfc1-4234-a91c-72b3a1cb9e26) | ' + str(dtstamp) + ' | ' + _message}
+    webhook_url = lihim.slack_webhook_viewbag #viewbag 
+    requests.post(webhook_url, data=json.dumps(slack_msg))
+
+
+# ======================================================= ===
+# STRINGIFY payload
+#   Notes:
+#   - Graph sometimes returns `None`
+#   - Address data quality issues at graph; strip None
+# ======================================================= ===
+
+def bstr(_string):
+    if _string is None:
+        return 'None'
+    else:
+        regex = re.compile(r'[\n\r\t]')
+        return regex.sub('', str(_string))
+
+# ============================== ===
+# CREATE Tab-delimited TXT File
+# ============================== ===
+def write_to_txt_file(_i_List, _fileout):
+    _list_length = len(_i_List)
+    with open(payload_path + _fileout, 'a') as file_output:
+        for _i_key, _i_val in enumerate(_i_List):
+            if _i_key < _list_length -1:
+                file_output.write(str(_i_val) + '\t')
+            else:
+                file_output.write(str(_i_val))
+        file_output.write('\n')
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -42,56 +78,83 @@ else:
     # Handle target environment that doesn't support HTTPS verification
     ssl._create_default_https_context = _create_unverified_https_context
 
-
-
-# === Display Program Execution start time ====
-print ("### Python program START ### : " + str(datetime.now()))
-
-
-# ========== Instantiate "environment" variables & containers ==========
-# Write Container list
-global writeList
-writeList = ['id', 'Display Name', 'Given Name', 'Surname', \
-    'Email', 'Job Title' \
-        ]
-global fields
-fields = writeList
-
-global _sysparams
-_sysparams = False 
-
-
-# HELIOS
-payload_path = '/mypath/files/graph/'
-
-
 # ============================== ===
-# Process JSON payload
+# GENERATE access token
 # ============================== ===
+def get_access_token(_clientid):
+    # ==== GENERATE Access Token ====
+    conn = http.client.HTTPSConnection("login.microsoftonline.com")
+    payload = 'client_id=' + lihim.graph_client_id + '&client_secret=' + lihim.graph_secret + '&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default'
+    headers = {
+    'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    conn.request("GET", "/your_tenant_id/oauth2/v2.0/token", payload, headers)
+    res = conn.getresponse()
+    token_ = res.read().decode("utf-8")
+    return token_
 
-# --- Address data quality issues at graph; strip None ---
-# Graph sometimes returns `None`
-def bstr(_string):
-    if _string is None:
-        return 'None'
-    return str(_string)
 
-def process_GraphAPI_Results(_payload):
-    global writeList 
-    #===== Open file and transform + enrich =====
+# ======================================================================== ===
+# PROCESS graph json output  
+#   - $$$ Iterate through nested sources dictionary{} and list[] $$$
+#   - Bread and butter
+# ======================================================================== ===
 
+def get_list_values(_list, _key, _fileout):
+    _itemctr = 1
+    for _items in _list:
+        if type(_items) is dict:
+            get_webster_values(_items, _fileout, False)
+        else:
+            #print(_items) #debug only
+            writeList = []
+            writeList.append(aad_id.replace('\t', '')) #key 1
+            _write_key = _key + '_' + str(_itemctr) # key 2
+            _write_item = bstr(_items) # value
+            writeList.append(_write_key) 
+            writeList.append(_write_item.replace('\t', '')) 
+            write_to_txt_file(writeList, _fileout)
+        _itemctr += 1
+
+def get_webster_values(_payload, _fileout, _blnwebster):
+    global _key_hdr_dict
+
+    for _key, _value in _payload.items():
+        if type(_value) is dict:
+            # --- get additional value header ---
+            _key_hdr_dict = bstr(_key)
+            get_webster_values(_value, _fileout, True)
+        elif type(_value) is list:
+            # --- get additional value header --- 
+            _key_hdr_list = bstr(_key)
+            get_list_values(_value, _key, _fileout)
+        else:
+            if _blnwebster == True:
+                writeList = []
+                writeList.append(aad_id.replace('\t', '')) #key 1
+                _write_key =  _key_hdr_dict + '.' + _key # key 2
+                _write_item = bstr(_value) # value
+                writeList.append(_write_key) 
+                writeList.append(_write_item.replace('\t', '')) 
+                write_to_txt_file(writeList, _fileout)
+            else:
+                writeList = []
+                writeList.append(aad_id.replace('\t', '')) #key 1
+                _write_key = _key # key 2
+                _write_item = bstr(_value) # value
+                writeList.append(_write_key) 
+                writeList.append(_write_item.replace('\t', '')) 
+                write_to_txt_file(writeList, _fileout)
+
+def process_graphapi_results(_payload, _fileidentifier, _accesstoken):
+    global writeList
+    global aad_id
+ 
     # === CONVERT str to json ===
     data = json.loads(_payload) 
-    #debug only: print (data)
-
-
-    # ====== WRITE output file headers =========
-    write_to_txt_file(writeList)
 
     # ==== READ Payload =====
     data_collection = data['value']
-    #debug only: print(data_collection)
-
 
     # ==== PARSE and PROCESS Graph API Payload =====
     i=0
@@ -101,47 +164,16 @@ def process_GraphAPI_Results(_payload):
         
         # ======= READ & GET only needed Dictionary key-value contents =======
         aad_id = bstr(d0['id'])
-        displayName = bstr(d0['displayName'])
-        givenName = bstr(d0['givenName'])
-        surname = bstr(d0['surname'])
-        email = bstr(d0['userPrincipalName'])
-        jobTitle = bstr(d0['jobTitle']) 
-
-        # ==== Store needed data in list ===
-        writeList.append(aad_id.replace('\t', ''))
-        writeList.append(displayName.replace('\t', ''))
-        writeList.append(givenName.replace('\t', ''))
-        writeList.append(surname.replace('\t', ''))
-        writeList.append(email.replace('\t', ''))
-        writeList.append(jobTitle.replace('\t', ''))
-        
-
-        # ====== WRITE to file =========
-        write_to_txt_file(writeList)
-
+        get_webster_values(d0, 'graphapi_identities_' + output_file_stamp + '.txt', False)
         i+= 1
 
-# ============================== ===
-# CREATE Tab-delimited TXT File
-# ============================== ===
+    post_slack_msg("[INFO] | processed " + str(i) + " records in this graph api dataset/batch")
 
-def write_to_txt_file(_i_List):
-    _list_length = len(_i_List)
-    with open(payload_path + 'graphapi_users_' + output_file_stamp + '.txt', 'a') as file_output:
-        for _i_key, _i_val in enumerate(_i_List):
-            if _i_key < _list_length -1:
-                file_output.write(str(_i_val) + '\t')
-            else:
-                file_output.write(str(_i_val))
-        file_output.write('\n')
 
-  
 # ============================== ===
 # Create Timestamp
 # ============================== ===
 def create_timestamp():
-    #datetime_object = datetime.strptime('Jun 1 2020  1:33PM', '%b %d %Y %I:%M%p')
-    #print (datetime_object)
     dt = str(datetime.fromisoformat(str(datetime.now())))
     dt = dt.replace('-', '')
     dt = dt.replace(' ', '_')
@@ -150,10 +182,28 @@ def create_timestamp():
     return dt
 
 
-# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ ===>
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ ===#
 # Code Driver : MAIN
-# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ ===>
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ ===#
 try:
+    
+    # ========== Instantiate "environment" variables & containers ==========
+    # Write Identity list
+    global writeList
+    writeList = ['AAD_ID', 'GRAPH_KEY', 'GRAPH_VALUE']
+
+    global fields
+    fields = writeList
+
+    global _sysparams
+    _sysparams = False 
+
+    # === Display Program Execution start time ====
+    print ("### Python program START ### : " + str(datetime.now()))
+    #debug only
+    post_slack_msg("[INFO] | ###$ python program start $###")
+
+    payload_path = '/local_path_here/'
 
     nextPageExists = True
 
@@ -179,54 +229,60 @@ try:
 
     #2 Connect to Graph and Get payload
     # -----------------------------------------
-        
     # ==== GENERATE Access Token ====
-    conn = http.client.HTTPSConnection("login.microsoftonline.com")
-    payload = 'client_id=___&client_secret=___&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default'
-    headers = {
-    'Content-Type': 'application/x-www-form-urlencoded',
-    'Cookie': 'x-ms-gateway-slice=prod; stsservicecookie=ests; fpc=AtFNoyrjgQpIlyC0MQvqfvYi7P8JAQAAAI6uptcOAAAA'
-    }
-    conn.request("GET", "/fd7___/oauth2/v2.0/token", payload, headers)
-    res = conn.getresponse()
-    token_ = res.read().decode("utf-8")
-
-
+    token_ = get_access_token('[1] : dfad8261-1234-5678-a722-000000')
     # ===== CONVERT response to JSON =====
     graph_aad_dict = json.loads(token_)
-
-
-
     # ==== READ access token from dictionary =====
     access_token = graph_aad_dict['access_token']
+
+    #debug only : post at Slack
+    post_slack_msg("[1] | access token generated")
 
 
     # ==== EXECUTE Graph API ====
     conn = http.client.HTTPSConnection("graph.microsoft.com")
     headers = { 'Authorization': 'Bearer ' + access_token}
+    payload = 'client_id=' + lihim.graph_client_id + '&client_secret=' + lihim.graph_secret + '&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default'
+
 
     # ==== FORM initial Graph Request ====
     # prod graph call ----- with specifics and extended attributes
-
-    # Filtered Graph request (demo)
     
-    _graphreq = "/v1.0/users?$filter=startswith(displayName,\
-'benjamin')&$select=id,accountEnabled,userPrincipalName,\
+    _graphreq = '/v1.0/users?$select=id,accountEnabled,userPrincipalName,\
 displayName,surname,givenName,jobTitle,\
-manager,state,country,mobilephone"
+manager,city,state,country,mobilephone,officeLocation,mail&$top=900'
     
     conn.request("GET", _graphreq, payload, headers)
+
+    # ====== WRITE output file headers =========
+    #1  identities
+    write_to_txt_file(writeList, 'graphapi_identities_' + output_file_stamp + '.txt')
 
     # ==== READ returned API payload ====
     res = conn.getresponse()
     Graph_Data = res.read().decode("utf-8")
-    #print(_graph_data)
+    #print(_graph_data) #debug only
 
 
-    #3 Process and Generate Output
-    # -----------------------------------------
+    #3 Process + Unpack + Flatten data and Generate Output
+    # ------------------------------------------------------
+    _ctr = 1
     while nextPageExists == True:
-        process_GraphAPI_Results(Graph_Data)
+        process_graphapi_results(Graph_Data, output_file_stamp, access_token)
+        _ctr +=1
+
+        # ==== GENERATE Access Token ====
+        token_ = get_access_token(lihim.graph_client_id)
+        # ===== CONVERT response to JSON =====
+        graph_aad_dict = json.loads(token_)
+        # ==== READ access token from dictionary =====
+        access_token = graph_aad_dict['access_token']
+
+        #debug only
+        print ("$ access token generated : " + str(datetime.now()))
+        #debug only : post at Slack
+        post_slack_msg("[" + str(_ctr) +  "] | access token generated")
 
         conn = http.client.HTTPSConnection("graph.microsoft.com")
         headers = {
@@ -235,13 +291,12 @@ manager,state,country,mobilephone"
 
         # === CHECK if next page exists ===
         nextPage = ''
-        Graph_Data_json = json.loads(Graph_Data)
+        Graph_Data_json = json.loads(Graph_Data) #str to json
         if '@odata.nextLink' in Graph_Data_json:
             nextPage = Graph_Data_json['@odata.nextLink']
             # format nextPage
             nextPage = '/' + nextPage.strip('https://graph.microsoft.com')
             nextPageExists = True
-            #debug only: print("Next page: ", nextPage)
         else:
             nextPage = ''
             nextPageExists = False
@@ -250,67 +305,40 @@ manager,state,country,mobilephone"
 
         # ==== GO to next API result set  ====
         _graphreq = nextPage
-
         conn.request("GET", _graphreq, payload, headers)
 
         # ==== READ returned API payload ====
         res = conn.getresponse()
-        Graph_Data = res.read().decode("utf-8")
-        #debug only: print (Graph_Data)
-
-
-    # 20210213 : Need to parameterize json converter subroutines; file size could reach GB if full pull is done
-    if _sysparams == True:
-        #4 Convert output file from txt --> json
-        # -----------------------------------------
-        output_file_txt = payload_path + 'graphapi_users_' + output_file_stamp + '.txt'
         
-        # MAIN container dictionary 
-        dict1 = {}
-        
-        with open(output_file_txt) as fh: 
-            # count variable for azure ad user id creation 
-            ctr_entry = 0
-            for line in fh: 
-                if line == '':
-                    break
-                else:
-                    definitions = list( line.strip().split("\t", 20))
-                    # for automatic creation of id for each Azure AD User 
-                    if ctr_entry == 0:
-                        aad_no = 'header'
-                    else:
-                        aad_no ='detail_aad_rec_'+str(ctr_entry) 
-                
-                    # loop variable 
-                    i = 0
-                    # intermediate dictionary 
-                    dict2 = {} 
-                    while i<len(fields): 
-                            # creating dictionary for each Azure AD User 
-                            dict2[fields[i]]= definitions[i] 
-                            i+=1
-                            
-                    # append the record of each Azure AD User to the main dictionary 
-                    dict1[aad_no]= dict2 
-                    ctr_entry += 1
-        
-        
-        # creating json file         
-        out_file_json = open(payload_path + 'graphapi_users_' + output_file_stamp + '.json', "w") 
-        json.dump(dict1, out_file_json, indent = 4) 
-        out_file_json.close() 
-    
+        try:
+            blnConnErr = False 
+            Graph_Data = res.read().decode("utf-8", errors='ignore')
+        except ConnectionResetError:
+            post_slack_msg("[ERROR] | ConnectionResetError at retry (0). Sent request [" + str(_graphreq) +  "] ")
+            blnConnErr = True 
+            continue 
 
-    #4 Write output file to parquet (PAUSED)
-    # -----------------------------------------
-    #   ---- Convert output file from json --> parquet
+        _retry = 1
+        while blnConnErr == True:
+            if _retry >= 5:
+                post_slack_msg("[SELF-TERMINATE] | Terminating execution quit() at retry (" + str(_retry) + "). Sent request [" + str(_graphreq) +  "] ")
+                quit()
+            else:
+                try:
+                    res = conn.getresponse()
+                    Graph_Data = res.read().decode("utf-8", errors='ignore')
+                    blnConnErr = False
+                except:
+                    post_slack_msg("[SELF-HEAL] | ConnectionResetError at retry (" + str(_retry) + "). Sent request [" + str(_graphreq) +  "] ")
+                    blnConnErr = True 
+                    continue
+            _retry += 1
 
-    #   ---- Read file via pandas 
 
 except:
     err = sys.exc_info()[0]
-    print (err)    
+    print (str(datetime.now()) + ' : ' + str(err))     
+    post_slack_msg("[ERROR] | " + str(err) + " | ###$ python program terminated $###")
     print ('''
                         .+~                :xx++::
                     :`. -          .!!X!~"?!`~!~!. :-:.
@@ -393,3 +421,6 @@ finally:
     )
     # === Display Program Execution end time ====
     print ("### Python program END ### : " + str(datetime.now()))
+    #debug only
+    post_slack_msg("[INFO] | ###$ python program end $###")
+
