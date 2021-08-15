@@ -37,7 +37,7 @@ import re
 def post_slack_msg(_message):
     ########### Post Log at Slack Channel #viewbag ################
     dtstamp = datetime.now()
-    slack_msg = {'text' : '#Graph (Azure AD : fd799da1-bfc1-4234-a91c-72b3a1cb9e26) | ' + str(dtstamp) + ' | ' + _message}
+    slack_msg = {'text' : '#Graph (Azure AD OData json payload) | ' + str(dtstamp) + ' | ' + _message}
     webhook_url = lihim.slack_webhook_viewbag #viewbag 
     requests.post(webhook_url, data=json.dumps(slack_msg))
 
